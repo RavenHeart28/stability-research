@@ -167,14 +167,65 @@ p1 = plot(time, expDef,'ko-', t, numDef,'r'); %сопоставление чис
 w_err = max((abs(expDef - numDef)./expDef) * 100);
 
 %% Исследование устойчивости
+% устойчивость по начальным данным
 
-% FindDeformation(t, xSol(1), xSol(2), gam, L, thet, sigm, eps_init);
-% правая часть (1/vo) * (Ge/(Gr + Ge)) * (sigm - Gr * e - w(e))
+eps_true = numDef; %истинное решение (без возмущений)
+Gr = xSol(1);
+Ge = xSol(2);
+
+n = 500; % число выборок для задания различных возмущений
+nb = 5; % число возмущений
+nb_step = 20; % шаг между возмущениями (в процентах)
+% возмущения должны образовывать арифметическую прогрессию типа 1% 2% 3% 4% 5% => nb = 5, nb_step = 1 ; 5% 10% 15% =>nb = 3, nb_step = 5
 
 
+bounds = eps_init * [ones(1,nb)-(1:nb) * nb_step * 0.01; ones(1,nb)+(1:nb) * nb_step * 0.01 ]'; %список границ возмущений н.у. 
+ei_sampl = bounds(:,1) + (bounds(:,2) - bounds(:,1)) .* rand(1,n); % массив выборок н.у. (равномерное распределение на границах bounds)
 
+figure(); %проверка выборочных данных (столбчатые диаграммы для различных возмущений н.у.)
+tiledlayout(2,3);
+for k = 1:5
+    nexttile;
+    histogram(ei_sampl(k,:),50);
+    title(['Возмущение н.у. ', num2str(k), ' %']);
+end
 
+norm_list = zeros(5,n);
+for k = 1:5
+    for i = 1:n
+        eps_pert = FindDeformation(t, Gr, Ge, gam, L, thet, sigm, ei_sampl(k, i)); %возмущенное решение
+        norm_value = norm(eps_pert - eps_true) / norm(eps_true); %евклидова норма отклонения решений, записанная в относительных единицах (после деления)
+        norm_list(k, i) = norm_value;
+    end
+end
 
+figure(); %иллюстрация распределений норм отклонений решений при различных возмущениях 
+tiledlayout(2,3);
+for k = 1:5
+    nexttile;
+    histogram(norm_list(k,:), 50);
+    title(['Отклонение при ', num2str(k), ' %']);
+end
+
+mean_list = [mean(norm_list(1,:)) mean(norm_list(2,:)) mean(norm_list(3,:)) mean(norm_list(4,:)) mean(norm_list(5,:))]; %мат. ожидание для каждого возмущения 1%...5%
+std_list = [std(norm_list(1,:)) std(norm_list(2,:)) std(norm_list(3,:)) std(norm_list(4,:)) std(norm_list(5,:))]; %СКО для каждого возмущения 1%...5%
+
+figure(); %построение графиков МО и СКО для различных возмущений 1%..5%
+p1 = plot(1:5, mean_list, 'k-o');
+    set(gca, 'XTick',1:5)
+    xlabel('Δε₀, %', FontSize=12);
+    ylabel('M',FontSize=14);
+    p1.LineWidth = 2.5;
+    p1.MarkerSize = 9;
+    grid on;
+figure();
+p2 = plot(1:5, std_list, 'k-o');
+    set(gca, 'XTick',1:5)
+    xlabel('Δε₀, %', FontSize=12);
+    ylabel('S',FontSize=14);
+    p2.LineWidth = 2.5;
+    p2.MarkerSize = 9;
+    grid on;
 
 %% локальные функции
 function valOF = FindObjectiveFunction(tExp, eExp, Gr, Ge, gam, L, thet, sigm, epsInit) %найти значение целевой функции при известных экспериментальных деформациях yExp и векторе параметров xParam
@@ -197,6 +248,8 @@ ksiVal = ksiDependence(eps0);
 sigm0d = sigm0 ./ (xi * lamd); % напряжения в безразмерном виде
 nu = nuCalculation(sigm0d, xi, Ge, tau0);
 dedt = (Ge / (nu * (Ge + Gr))) * (sigm - Gr * eps - (thet/(gam)) * ksiVal + lamd * eps0);
+% g1 = sigm - Gr * eps;
+% g2 = - (thet/(gam)) * ksiVal + lamd * eps0;
 end
 
 function f = FindOscillationFrequency(L, E)
